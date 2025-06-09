@@ -152,32 +152,111 @@ function attachDetailEventListeners() {
     });
   });
 }
-
 function renderDetailData(json) {
   const container = document.getElementById("laws-container");
-  container.innerHTML = "<h2>📘 상세 법령 정보</h2>";
+  container.innerHTML = `
+    <button id="back-btn">🔙 돌아가기</button>
+    <h2>📘 상세 법령 정보</h2>
+    <div id="section-buttons" style="margin-bottom: 20px;"></div>
+    <div id="detail-sections"></div>
+  `;
+
+  const sectionButtons = document.getElementById("section-buttons");
+  const detailContainer = document.getElementById("detail-sections");
 
   const law = json?.법령;
-
   if (!law) {
-    container.innerHTML += "<p>데이터 형식이 올바르지 않습니다.</p>";
+    detailContainer.innerHTML = "<p>데이터 형식이 올바르지 않습니다.</p>";
     return;
   }
 
-  // 전체 항목을 순회하면서 각 키와 값을 표시
-  Object.entries(law).forEach(([key, value]) => {
-    // 객체나 배열인 경우는 JSON 문자열로 출력
-    const formattedValue =
-      typeof value === "object"
-        ? `<pre>${JSON.stringify(value, null, 2)}</pre>`
-        : value;
+  // ✅ 표시할 항목들 순서 정의
+  const sectionOrder = [
+    "개정문",
+    "법령키",
+    "별표",
+    "기본정보",
+    "부칙",
+    "조문",
+    "제개정이유",
+  ];
 
-    container.innerHTML += `
-      <div class="law-section">
+  // ✅ 각 항목 존재 여부 확인 후 버튼 생성
+  sectionOrder.forEach((sectionName) => {
+    const keyExists = Object.keys(law).some((k) => k.includes(sectionName));
+    if (keyExists) {
+      const button = document.createElement("button");
+      button.innerText = `📎 ${sectionName}`;
+      button.addEventListener("click", () => {
+        const target = document.getElementById(`section-${sectionName}`);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+      sectionButtons.appendChild(button);
+    }
+  });
+
+  // ✅ 렌더링 함수 정의
+  function renderValue(value) {
+    if (typeof value === "string") {
+      if (value.includes("/LSW/")) {
+        return `<a href="https://www.law.go.kr${value}" target="_blank" rel="noopener">🔗 링크</a>`;
+      }
+      return value;
+    } else if (Array.isArray(value)) {
+      return value
+        .map((item) => `<div class="nested-item">${renderValue(item)}</div>`)
+        .join("");
+    } else if (typeof value === "object" && value !== null) {
+      return Object.entries(value)
+        .map(([k, v]) => {
+          const isLink =
+            k.includes("링크") || k.includes("파일") || k.includes("다운로드");
+          if (isLink && typeof v === "string" && v.includes("/LSW/")) {
+            return `
+              <div class="law-section">
+                <span class="law-label">${k}:</span>
+                <span class="law-value">
+                  <a href="https://www.law.go.kr${v}" target="_blank" rel="noopener">📎 링크 바로가기</a>
+                </span>
+              </div>
+            `;
+          } else {
+            return `
+              <div class="law-section">
+                <span class="law-label">${k}:</span>
+                <span class="law-value">${renderValue(v)}</span>
+              </div>
+            `;
+          }
+        })
+        .join("");
+    } else {
+      return value;
+    }
+  }
+
+  // ✅ 실제 내용 렌더링
+  for (const [key, value] of Object.entries(law)) {
+    // 어떤 섹션에 해당하는지 판단
+    let sectionId = "";
+    for (const section of sectionOrder) {
+      if (key.includes(section)) {
+        sectionId = `section-${section}`;
+        break;
+      }
+    }
+
+    detailContainer.innerHTML += `
+      <div class="law-section" ${sectionId ? `id="${sectionId}"` : ""}>
         <span class="law-label">${key}:</span>
-        <span class="law-value">${formattedValue}</span>
+        <span class="law-value">${renderValue(value)}</span>
       </div>
     `;
+  }
+
+  // ✅ 돌아가기 버튼 이벤트
+  document.getElementById("back-btn").addEventListener("click", () => {
+    renderLaws(filterData.length > 0 ? filterData : cachedData);
   });
 }
 
